@@ -11,14 +11,26 @@ exports.Lobby = class {
 		this._hasPotentialHost = false;
         this._clients = []; // An array of tuples with [ip_addr, port, id]
         this._host = null; // A single tuple with [ip_addr, port]
+        this.nextHostConnection = ["",0];
     }
-	
+    
+    GetHost() { return this._host; }
 	GetActive() { return this._active; }
 	GetHasPotentialHost() { return this._hasPotentialHost; }
 	
 	// Periodic update.
 	Tick(dT) {
-	}
+    }
+    
+    CanClientConnect() {
+        return this._active;
+    }
+
+    // Add a client of proper format to the clients list.
+    AddClient(c) {
+        this._clients.push(c);
+        // TODO
+    }
 	
 	// Tells this lobby not to accept another host request.
 	HasPotentialHost() {
@@ -39,7 +51,7 @@ exports.Lobby = class {
         this._host = host;
 		this._active = true;
 		
-		console.log(""+this._host[0]+":"+this._host[1]+" is now hosting lobby "+this._id);
+		console.log("[DEBUG] "+this._host[0]+":"+this._host[1]+" is now hosting lobby "+this._id);
 
         return 0;
     }

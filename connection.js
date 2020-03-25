@@ -1,6 +1,8 @@
 // Sky Hoffert
 // Used to retain persistence in connections.
 
+// TODO: connections will stay forever.
+
 exports.Connection = class {
 	constructor(addr, port) {
 		this._active = true;
@@ -12,16 +14,63 @@ exports.Connection = class {
 		this._isHosting = false;
 		this._hostingLobbyNum = -1;
 		this._wantsToHostPID = -1;
+		this._isClient = false;
+		this._wantsToConnect = false;
+		this._isConnected = false;
+		this._clientLobbyNum = -1;
+		this._isHostConnection = false;
+		this._hostConnectionLobbyNum = -1;
 	}
 	
 	GetWantsToHost() { return this._wantsToHost; }
 	GetIsHosting() { return this._isHosting; }
 	GetHostingLobbyNum() { return this._hostingLobbyNum; }
 	GetWantsToHostPID() { return this._wantsToHostPID; }
+	GetIsClient() { return this._isClient; }
+	GetWantsToConnect() { return this._wantsToConnect; }
+	GetIsConnected() { return this._isConnected; }
+	GetClientLobbyNum() { return this._clientLobbyNum; }
+	GetIsHostConnection() { return this._isHostConnection; }
 	
 	// Periodic update.
 	Tick(dT) {
-		console.log(this._id + ", tick");
+		// DEBUG
+		//console.log(this._id + ", tick");
+	}
+
+	// When a client wants to connect to a lobby.
+	// @param ln: lobby number
+	// @param pID: packed ID of the connect request
+	// @return int: 0 on success, error code otherwise
+	NowWantsToConnect(ln, PID) {
+		if (this._isHosting) {
+			return 1;
+		} else if (this._isConnected || this._clientLobbyNum !== -1) {
+			return 2;
+		}
+
+		this._isClient = true;
+		this._wantsToConnect = true;
+		this._clientLobbyNum = ln;
+
+		return 0;
+	}
+
+	// When a client is now connected to a lobby.
+	// @return int: 0 on success, error code otherwise
+	NowConnected() {
+		if (!this._wantsToConnect) {
+			return 1;
+		} else if (this._clientLobbyNum === -1) {
+			return 2;
+		} else if (!this._isClient) {
+			return 3;
+		}
+
+		this._isConnected = true;
+		this._wantsToConnect = false;
+
+		return 0;
 	}
 	
 	// If a connection wants to host a lobby.
