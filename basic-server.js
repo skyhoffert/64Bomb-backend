@@ -221,8 +221,8 @@ server.on("message", function (msg, rinfo) {
         msg[1] = 0x00;
         msg[2] = 0x14; // HERE_HOST_ADDRESS
         let host = lobbies[0].GetHost(); // [IP, PORT]
-        let ip = endian.htobe32(util.IPToInt(host[0]));
-        let port = endian.htobe32(host[1]);
+        let ip = endian.htobe32(util.IPToInt(lobbies[0].nextHostConnection[0]));
+        let port = endian.htobe32(lobbies[0].nextHostConnection[1]);
         util.Memcpy(msg, 3, ip, 0, 4);
         util.Memcpy(msg, 7, port, 0, 4);
         server.sendto(msg, 0, msg.length, rinfo.port, rinfo.address);

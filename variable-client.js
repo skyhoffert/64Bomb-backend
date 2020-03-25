@@ -8,15 +8,27 @@ const dgram = require("dgram");
 const client = dgram.createSocket("udp4");
 const readline = require('readline');
 
+var TICK_RATE = 1000.0/30.0;
+
 var msg;
 var timeSent;
 
 var IP = "127.0.0.1";
 var PORT = 5000;
 
+if (process.argv.length === 4) {
+	IP = process.argv[2];
+	PORT = parseInt(process.argv[3]);
+}
+
+console.log("Using server address "+IP+":"+PORT);
+
 var clientConnections = [];
 
 var hostConnection = null;
+
+var tickAsClient = false;
+var tickAsHost = false;
 
 var rl = readline.createInterface({
   input: process.stdin,
@@ -171,7 +183,7 @@ client.on("message", function (msg, rinfo) {
 				clientConnections[0].valid = true;
 				console.log("  ACK_HOST_CONNECTION");
 				console.log("  "+clientConnections[0].valid);
-			} else if (msg[2] === 0x02) {
+			} else if (msg[2] === 0x02) { // PING
 				console.log("got a ping from clientConn[0]");
 
 				msg = new Uint8Array(3);
@@ -185,6 +197,9 @@ client.on("message", function (msg, rinfo) {
 				console.log("got a pong from clientConn[0]");
 				let now = Date.now();
 				console.log("  elapsed: "+(now-timeSent)+" ms");
+				if (!tickAsHost) {
+					tickAsHost = true;
+				}
 			}
 		});
 	} else if (msg[2] === 0x0c) { // ACK_HOST_CONNECTION
@@ -251,8 +266,6 @@ client.on("message", function (msg, rinfo) {
 					hostConnection.sendto(msg, 0, msg.length, port, ip); // DEBUG
 					hostConnection.sendto(msg, 0, msg.length, port, ip); // DEBUG
 				} else if (msg[2] === 0x02) { // PING
-					console.log("got a ping from hostConnection");
-
 					msg = new Uint8Array(3);
 					msg[0] = 0x01;
 					msg[1] = 0x00;
@@ -262,6 +275,9 @@ client.on("message", function (msg, rinfo) {
 					let now = Date.now();
 					console.log("hostConnection pong");
 					console.log("  elapsed "+(now-timeSent)+" ms");
+					if (!tickAsClient) {
+						tickAsClient = true;
+					}
 				}
 			}
 		});
@@ -299,3 +315,57 @@ client.on("message", function (msg, rinfo) {
 		console.log("[ERROR] Unable to parse.");
 	}
 });
+
+var prevUpdate = -1;
+function Tick() {
+	if (prevUpdate < 0) {
+		prevUpdate = Date.now();
+		return;
+	}
+	
+	let now = Date.now();
+	let dT = now - prevUpdate;
+	prevUpdate = now;
+	
+	if (tickAsClient) {
+		TickAsClient(dT);
+	} else if (tickAsHost) {
+		TickAsHost(dT);
+	}
+}
+
+var lastPing = 0;
+
+function TickAsClient(dT) {
+	if (lastPing > 1000) {
+		lastPing = 0;
+		
+		msg = new Uint8Array(3);
+		msg[0] = 0x01;
+		msg[1] = 0x00;
+		msg[2] = 0x02; // PING
+		timeSent = Date.now();
+		hostConnection.sendto(msg, 0, msg.length, hostConnection.port, hostConnection.ip);
+	} else {
+		lastPing += dT;
+	}
+}
+
+function TickAsHost(dT) {
+	if (lastPing > 1000) {
+		lastPing = 0;
+		
+		msg = new Uint8Array(3);
+		msg[0] = 0x01;
+		msg[1] = 0x00;
+		msg[2] = 0x02; // PING
+		timeSent = Date.now();
+		clientConnections[0].sendto(msg, 0, msg.length, clientConnections[0].port, clientConnections[0].ip);
+	} else {
+		lastPing += dT;
+	}
+	
+	// TODO: only works on client[0]
+}
+
+setInterval(Tick, TICK_RATE);
