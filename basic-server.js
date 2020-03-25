@@ -25,7 +25,7 @@ server.on("error", function (err) {
 
 server.on("message", function (msg, rinfo) {
 	// Add this connection to the dict if unknown.
-	let connID = rinfo.address+rinfo.port;
+	let connID = rinfo.address+":"+rinfo.port;
 	if (!conns[connID]) {
         console.log("New connection from "+connID);
 		conns[connID] = new conn.Connection(rinfo.address, rinfo.port);
@@ -207,33 +207,35 @@ server.on("message", function (msg, rinfo) {
             return;
         }
 
+        let id = msg[1];
+
         msg = new Uint8Array(4);
         msg[0] = 0x01;
         msg[1] = 0x00;
         msg[2] = 0x13; // ACK_CLIENT_CONNECTION
-        msg[3] = 0x00; // TODO
+        msg[3] = id;
+        server.sendto(msg, 0, msg.length, rinfo.port, rinfo.address);
+        
+        msg = new Uint8Array(11);
+        msg[0] = 0x01;
+        msg[1] = 0x00;
+        msg[2] = 0x14; // HERE_HOST_ADDRESS
+        let host = lobbies[0].GetHost(); // [IP, PORT]
+        let ip = endian.htobe32(util.IPToInt(host[0]));
+        let port = endian.htobe32(host[1]);
+        util.Memcpy(msg, 3, ip, 0, 4);
+        util.Memcpy(msg, 7, port, 0, 4);
         server.sendto(msg, 0, msg.length, rinfo.port, rinfo.address);
         
         msg = new Uint8Array(11);
         msg[0] = 0x01;
         msg[1] = 0x00;
         msg[2] = 0x16; // HERE_CLIENT_ADDRESS
-        let host = lobbies[0].GetHost(); // [IP, PORT]
-        let ip = endian.htobe32(util.IPToInt(host[0]));
-        let port = endian.htobe32(host[1]);
-        util.Memcpy(msg, 3, ip, 0, 4);
-        util.Memcpy(msg, 7, port, 0, 4);
-        server.sendto(msg, 0, msg.length, host[1], host[0]);
-        
-        msg = new Uint8Array(11);
-        msg[0] = 0x01;
-        msg[1] = 0x00;
-        msg[2] = 0x14; // HERE_HOST_ADDRESS
         ip = endian.htobe32(util.IPToInt(rinfo.address));
         port = endian.htobe32(rinfo.port);
         util.Memcpy(msg, 3, ip, 0, 4);
         util.Memcpy(msg, 7, port, 0, 4);
-        server.sendto(msg, 0, msg.length, rinfo.port, rinfo.address);
+        server.sendto(msg, 0, msg.length, host[1], host[0]);
     } else if (msg[2] === 0xff) { // KILL
         // TODO: clean up when a host or client kills.
         console.log(""+connID+" DC-ed");

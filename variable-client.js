@@ -33,6 +33,9 @@ function KILL(cb) {
 	for (let i = 0; i < clientConnections.length; i++) {
 		clientConnections[i].sendto(msg, 0, msg.length, PORT, IP);
 	}
+	if (hostConnection) {
+		hostConnection.sendto(msg, 0, msg.length, PORT, IP);
+	}
 }
 
 rl.on('line', function(line){
@@ -152,6 +155,10 @@ client.on("message", function (msg, rinfo) {
 		clientConnections[0].valid = false;
 		// TODO: above only works for lobby 0
 		clientConnections[0].on("message", function (msg, rinfo) {
+			msg = Uint8Array.from(msg)
+			for (let i = 0; i < msg.length; i++) {
+				console.log("  "+i+":"+msg[i]);
+			}
 			if (msg[0] !== 0x01) {
 				console.log("err with pID for clientConn[0]");
 				return;
@@ -164,6 +171,20 @@ client.on("message", function (msg, rinfo) {
 				clientConnections[0].valid = true;
 				console.log("  ACK_HOST_CONNECTION");
 				console.log("  "+clientConnections[0].valid);
+			} else if (msg[2] === 0x02) {
+				console.log("got a ping from clientConn[0]");
+
+				msg = new Uint8Array(3);
+				msg[0] = 0x01;
+				msg[1] = 0x00;
+				msg[2] = 0x03; // PONG
+				if (clientConnections[0].port) {
+					clientConnections[0].sendto(msg, 0, msg.length, clientConnections[0].port, clientConnections[0].ip);
+				}
+			} else if (msg[2] === 0x03) {
+				console.log("got a pong from clientConn[0]");
+				let now = Date.now();
+				console.log("  elapsed: "+(now-timeSent)+" ms");
 			}
 		});
 	} else if (msg[2] === 0x0c) { // ACK_HOST_CONNECTION
@@ -175,6 +196,11 @@ client.on("message", function (msg, rinfo) {
 			console.log("  unable to connect right now");
 		}
 	} else if (msg[2] === 0x10) { // YOU_WILL_CONNECT
+		if (msg[3] !== 0x00) {
+			console.log("[ERROR] issue when trying to connect as client.");
+			return;
+		}
+
 		msg = new Uint8Array(4);
 		msg[0] = 0x01;
 		msg[1] = 0x00;
@@ -190,19 +216,54 @@ client.on("message", function (msg, rinfo) {
 		msg[1] = 0x12;
 		msg[2] = 0x12; // ADD_CLIENT_CONNECTION
 		msg[3] = 0x00; // lobby 0 only
+		hostConnection.confirmed = false;
 		hostConnection.on("message", function (msg, rinfo) {
-			if (msg[0] !== 0x01) {
-				return;
+			msg = Uint8Array.from(msg);
+			if (!hostConnection.confirmed) {
+				if (msg[0] !== 0x01) {
+					return;
+				}
+				if (msg[2] !== 0x13) {
+					console.log("hostConnection did not get an ack");
+					return;
+				}
+				if (msg[3] !== 0x12) {
+					console.log("hostConnection got the wrong packet ID.");
+					return;
+				}
+				console.log("  ACK_CLIENT_CONNECTION");
+				hostConnection.confirmed = true;
+			} else {
+				if (msg[2] === 0x14) {
+					console.log("got host address.");
+					let ip = util.IntToIP(endian.beXXtoh(msg.subarray(3,7)));
+					let port = endian.beXXtoh(msg.subarray(7,11));
+					console.log("ip: "+ip+", port: "+port);
+					hostConnection.port = port;
+					hostConnection.ip = ip;
+
+					msg = new Uint8Array(3);
+					msg[0] = 0x01;
+					msg[1] = 0x00;
+					msg[2] = 0x02; // PING
+					timeSent = Date.now();
+					hostConnection.sendto(msg, 0, msg.length, port, ip);
+					hostConnection.sendto(msg, 0, msg.length, port, ip); // DEBUG
+					hostConnection.sendto(msg, 0, msg.length, port, ip); // DEBUG
+				} else if (msg[2] === 0x02) { // PING
+					console.log("got a ping from hostConnection");
+
+					msg = new Uint8Array(3);
+					msg[0] = 0x01;
+					msg[1] = 0x00;
+					msg[2] = 0x03; // PONG
+					hostConnection.sendto(msg, 0, msg.length, hostConnection.port, hostConnection.ip);
+				} else if (msg[2] === 0x03) { // PONG
+					let now = Date.now();
+					console.log("hostConnection pong");
+					console.log("  elapsed "+(now-timeSent)+" ms");
+				}
 			}
-			if (msg[2] !== 0x13) {
-				console.log("hostConnection did not get an ack");
-				return;
-			}
-			if (msg[3] !== 0x12) {
-				console.log("hostConnection got the wrong packet ID.");
-				return;
-			}
-			console.log("  ACK_CLIENT_CONNECTION");
 		});
 		hostConnection.sendto(msg, 0, msg.length, rinfo.port, rinfo.address, function () {});
 	} else if (msg[2] === 0x14) { // HERE_HOST_ADDRESS
@@ -223,6 +284,17 @@ client.on("message", function (msg, rinfo) {
 		let ip = util.IntToIP(endian.beXXtoh(msg.subarray(3,7)));
 		let port = endian.beXXtoh(msg.subarray(7,11));
 		console.log("ip: "+ip+", port: "+port);
+		clientConnections[0].ip = ip;
+		clientConnections[0].port = port;
+
+		msg = new Uint8Array(3);
+		msg[0] = 0x01;
+		msg[1] = 0x00;
+		msg[2] = 0x02; // PING
+		timeSent = Date.now();
+		clientConnections[0].sendto(msg, 0, msg.length, port, ip);
+		clientConnections[0].sendto(msg, 0, msg.length, port, ip); // DEBUG
+		clientConnections[0].sendto(msg, 0, msg.length, port, ip); // DEBUG
 	} else {
 		console.log("[ERROR] Unable to parse.");
 	}
