@@ -237,8 +237,16 @@ server.on("message", function (msg, rinfo) {
         util.Memcpy(msg, 7, port, 0, 4);
         server.sendto(msg, 0, msg.length, host[1], host[0]);
     } else if (msg[2] === 0xff) { // KILL
-        // TODO: clean up when a host or client kills.
         console.log(""+connID+" DC-ed");
+        
+        for (let i = 0; i < lobbies.length; i++) {
+            let dcs = lobbies[i].HandleDisconnect(rinfo.address, rinfo.port);
+            if (dcs.length > 0) {
+                console.log("Connection impacted a lobby.")
+            }
+            // TODO: handle all clients that were disconnected.
+        }
+        
 		delete conns[connID];
 	}
 });

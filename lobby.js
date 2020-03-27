@@ -69,6 +69,18 @@ exports.Lobby = class {
         return 0;
     }
 
+    // Removes client at given index.
+    // @return int: 0 on success, error code otherwise
+    RemoveClient(i) {
+        if (!this._clients[i]) {
+            return 1;
+        }
+
+        this._clients.splice(i,1);
+
+        return 0;
+    }
+
     // Adds a client to the lobby, if there is a valid host.
     // @param client: client to be added to the lobby
     // @return int: 0 on success, error code otherwise
@@ -83,5 +95,42 @@ exports.Lobby = class {
         this._clients.push(client);
 
         return 0;
+    }
+    
+    // Potentially remove a host or client from the current lobby.
+    // @param addr: IP address of disconnect
+    // @param port: Port of disconnect
+    // @return array: array of connections that should be killed
+    HandleDisconnect(addr, port) {
+        let conns = [];
+
+        if (this._host !== null && this._host[0] === addr && this._host[1] === port) {
+            console.log("Removing host.");
+            conns.push([this._host[0], this._host[1]]);
+
+            let eno = this.RemoveHost();
+            if (eno !== 0) {
+                console.log("[ERROR] Removing host.");
+            }
+
+            for (let i = 0; i < this._clients.length; i++) {
+                conns.push([this._clients[i][0], this._clients[i][1]]);
+            }
+
+            return conns;
+        }
+
+        for (let i = 0; i < this._clients.length; i++) {
+            if (this._clients[i] && this._clients[i][0] == addr && this._clients[i][1] == port) {
+                conns.push([this._clients[i][0], this._clients[i][1]]);
+
+                let eno = this.RemoveClient(i);
+                if (eno !== 0) {
+                    console.log("[ERROR] Removing host.");
+                }
+            }
+        }
+
+        return conns;
     }
 }
