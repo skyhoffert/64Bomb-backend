@@ -161,6 +161,7 @@ server.on("message", function (msg, rinfo) {
             msg[3] = 0x00;
             server.sendto(msg, 0, msg.length, rinfo.port, rinfo.address);
         } else {
+            console.log("client cannot connect.");
             msg = new Uint8Array(4);
             msg[0] = 0x01;
             msg[1] = 0x00;
@@ -169,7 +170,6 @@ server.on("message", function (msg, rinfo) {
             server.sendto(msg, 0, msg.length, rinfo.port, rinfo.address);
         }
     } else if (msg[2] === 0x0f) { // I_WILL_CONNECT
-        console.log("client is trying to connect.");
         let eno = conns[connID].NowWantsToConnect(msg[3], msg[1]);
         if (eno !== 0) { 
             console.log("[ERROR] Issue with I_WILL_CONNECT " + eno);
@@ -178,20 +178,19 @@ server.on("message", function (msg, rinfo) {
 
         // TODO: only works on lobby 0.
 
+        let pid = msg[1];
+
         if (lobbies[0].GetActive()) {
+            console.log("client is trying to connect.");
             msg = new Uint8Array(4);
             msg[0] = 0x01;
             msg[1] = 0x00;
             msg[2] = 0x10; // YOU_WILL_CONNECT
-            msg[3] = 0x00;
+            msg[3] = pid;
             server.sendto(msg, 0, msg.length, rinfo.port, rinfo.address);
+            console.log("  pid: "+pid);
         } else {
-            msg = new Uint8Array(4);
-            msg[0] = 0x01;
-            msg[1] = 0x00;
-            msg[2] = 0x10; // YOU_WILL_CONNECT
-            msg[3] = 0x01;
-            server.sendto(msg, 0, msg.length, rinfo.port, rinfo.address);
+            console.log("[ERROR] Client will not connect.");
         }
     } else if (msg[2] === 0x11) { // ACK_I_WILL_CONNECT
         console.log("client has joined lobby " + conns[connID].GetClientLobbyNum());
@@ -206,6 +205,8 @@ server.on("message", function (msg, rinfo) {
             console.log("[ERROR] Bad lobby number " + msg[3]);
             return;
         }
+
+        console.log("Lobby now distributes connection.");
 
         let id = msg[1];
 
